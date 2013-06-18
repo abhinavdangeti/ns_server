@@ -132,10 +132,10 @@ writeSASLConf(Path, Buckets, AU, AP, Tries, SleepTime) ->
     ok = filelib:ensure_dir(TmpPath),
     ?log_debug("Writing isasl passwd file: ~p", [filename:join(Pwd, Path)]),
     {ok, F} = file:open(TmpPath, [write]),
-    io:format(F, "~s ~s~n", [AU, AP]),
+    writeSASL_line(F, AU, AP),
     lists:foreach(
       fun({User, Pass}) ->
-              io:format(F, "~s ~s~n", [User, Pass])
+              writeSASL_line(F, User, Pass)
       end,
       Buckets),
     file:close(F),
@@ -155,6 +155,17 @@ writeSASLConf(Path, Buckets, AU, AP, Tries, SleepTime) ->
                 _ ->
                     ?log_info("Trying again after ~p ms (~p tries remaining)",
                               [SleepTime, Tries]),
-                    {ok, _TRef} = timer2:apply_after(SleepTime, ?MODULE, writeSASLConf, [Path, Buckets, AU, AP, Tries - 1, SleepTime * 2.0])
+                    {ok, _TRef} = timer:apply_after(SleepTime, ?MODULE, writeSASLConf, [Path, Buckets, AU, AP, Tries - 1, SleepTime * 2.0])
             end
     end.
+
+%% Use netstring format <LEN>:<NAME>,<LEN>:<PASSWORD>,<LEN>:<CONFIG>,
+writeSASL_line(SaslFile, AU, AP) ->
+    io:format(SaslFile, "~p:~s,", [string:len(AU), AU]),
+    Plen = string:len(AP),
+    if
+        Plen > 0 -> io:format(SaslFile, "~p:~s,", [Plen, AP]);
+        true -> ok
+    end,
+    io:format(SaslFile, "~n",[]).
+
